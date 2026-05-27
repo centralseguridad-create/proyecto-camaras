@@ -282,6 +282,33 @@ async function cargarUltimoTurno(){
 
   reporteTexto.value = ultimo.reporte || "";
 
+    // 🔥 RESTAURAR ESTADOS
+
+  if(ultimo.camaras){
+
+   [...tabla.tBodies[0].rows].forEach(tr=>{
+
+    const numero = tr.cells[0].innerText;
+
+    const cam = ultimo.camaras.find(c=>c.numero == numero);
+
+    if(!cam) return;
+
+    tr.querySelector(".estado").value =
+      cam.estado || "Operativa";
+
+    tr.querySelector(".motivo").value =
+      cam.motivo || "";
+
+    tr.cells[6].innerText =
+      cam.observacion || "";
+
+   });
+
+   actualizar();
+
+  } 
+
   turnoGuardado = true;
 
   console.log("✅ Último turno restaurado");
