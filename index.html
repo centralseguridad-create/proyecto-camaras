@@ -217,7 +217,9 @@ async function cargarDesdeFirebase(){
   console.log("Cámaras cargadas:",data.length);
 
   construirTabla(data);
-
+   
+  actualizar();
+   
  }catch(error){
 
   console.error(error);
