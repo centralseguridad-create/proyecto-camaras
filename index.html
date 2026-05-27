@@ -107,7 +107,14 @@ placeholder="🔍 Buscar cámara, sector o empresa">
 <div class="d-flex flex-wrap gap-2">
 <button class="btn btn-dark" id="btnGuardarTurno">
 💾 Guardar Turno
+</button>
+  
+<input type="file" id="jsonImport" accept=".json" hidden>
+
+<button class="btn btn-secondary" id="btnImportarJson">
+📥 Importar Historial
 </button>  
+  
 <button class="btn btn-outline-primary" id="btnReporte">📝 Reporte WhatsApp</button>
 <button class="btn btn-outline-success" id="btnCopiar">📋 Copiar WhatsApp</button>
 <button class="btn btn-success" id="btnExcel">📊 Exportar Excel</button>
@@ -733,6 +740,81 @@ btnPDF.onclick=()=>{
  pdf.save("reporte_camaras.pdf");
 };
 
+btnImportarJson.onclick = ()=>{
+
+ document.getElementById("jsonImport").click();
+
+};
+
+jsonImport.onchange = async(e)=>{
+
+ const file = e.target.files[0];
+
+ if(!file) return;
+
+ const texto = await file.text();
+
+ const historial = JSON.parse(texto);
+
+ const fechas = Object.keys(historial);
+
+ if(!confirm(`⚠️ Se importarán ${fechas.length} reportes históricos.\n\n¿Continuar?`)){
+  return;
+ }
+
+ try{
+
+  for(const fechaKey of fechas){
+
+   const item = historial[fechaKey];
+
+   const camaras = item.datos.map(c=>({
+
+    numero: c.id || "",
+    camara: c.camara || "",
+    sector: c.sector || "",
+    empresa: c.empresa || "",
+    estado: c.estado || "Operativa",
+    motivo: c.motivo || "",
+    observacion: c.observacion || ""
+
+   }));
+
+   const reporteId = `${item.fecha}_Importado`;
+
+   await firebaseTools.setDoc(
+
+    firebaseTools.doc(window.db,"reportes",reporteId),
+
+    {
+
+     fecha: item.fecha || "",
+     turno: "Importado",
+     eventos: item.eventos || 0,
+     camaras,
+     reporte: "Reporte histórico importado",
+     timestamp: new Date()
+
+    }
+
+   );
+
+   console.log(`✅ Importado ${item.fecha}`);
+
+  }
+
+  alert("🔥 Historial importado correctamente");
+
+ }catch(error){
+
+  console.error(error);
+
+  alert("❌ Error importando historial");
+
+ }
+
+};
+  
 </script>
 
 </body>
