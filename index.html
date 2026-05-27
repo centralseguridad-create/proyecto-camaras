@@ -82,7 +82,6 @@ textarea{font-family:Consolas,monospace;font-size:13px}
 <h2 class="mb-4">📹 Monitoreo de Cámaras – V2.6</h2>
 
 <div class="card p-4 mb-4">
-<input type="file" class="form-control mb-2" accept=".xlsx" id="excelInput">
 
 <input type="text" id="buscador" class="form-control mb-2"
 placeholder="🔍 Buscar cámara, sector o empresa">
@@ -159,67 +158,24 @@ window.onload = async () => {
 
 };
 
-/* ================= CARGA EXCEL ================= */
-excelInput.onchange = e => {
+turnoSelect.onchange = ()=>{
 
- const r = new FileReader();
+ desbloquearEdicion();
 
- r.onload = async ev => {
+ turnoGuardado = false;
 
-  try{
-
-   const wb = XLSX.read(ev.target.result,{type:"array"});
-
-   const data = XLSX.utils.sheet_to_json(
-    wb.Sheets[wb.SheetNames[0]],
-    {defval:""}
-   );
-
-   let total = 0;
-
-   for(const fila of data){
-
-    const id =
-      fila["N°"] ||
-      fila["Nº"] ||
-      fila["No"];
-
-    if(!id) continue;
-
-    await firebaseTools.addDoc(
-      firebaseTools.collection(db,"camaras"),
-      {
-
-       numero: id,
-       camara: fila["Cámara"] || "",
-       sector: fila["Sector"] || "",
-       empresa: fila["Empresa"] || "",
-       estado: "Operativa",
-       motivo: "",
-       observacion: ""
-
-      }
-    );
-
-    total++;
-
-   }
-
-   alert(`✅ ${total} cámaras importadas a Firebase`);
-
-  }catch(error){
-
-   console.error(error);
-
-   alert("❌ Error importando Excel");
-
-  }
-
- };
-
- r.readAsArrayBuffer(e.target.files[0]);
 
 };
+
+fechaReporte.onchange = ()=>{
+
+ desbloquearEdicion();
+
+ turnoGuardado = false;
+
+
+};  
+
 
 async function cargarDesdeFirebase(){
 
@@ -775,251 +731,6 @@ btnPDF.onclick=()=>{
  });
 
  pdf.save("reporte_camaras.pdf");
-};
-
-/* =========================================================
-   🔥 SISTEMA AVANZADO DE MEMORIA + HISTORIAL + RESPALDO
-   ========================================================= */
-
-const STORAGE_KEY = "monitoreo_camaras_v1";
-const BACKUP_KEY = "monitoreo_backup_auto";
-
-/* ================= UTILIDADES ================= */
-
-function obtenerFechaHoy(){
- const d=new Date();
- return d.toISOString().split("T")[0];
-}
-
-function obtenerEstadoActual(){
- return [...tabla.tBodies[0].rows].map(tr=>({
-  id:tr.cells[0].innerText,
-  camara:tr.cells[1].innerText,
-  sector:tr.cells[2].innerText,
-  estado:tr.querySelector(".estado").value,
-  empresa:tr.cells[4].innerText,
-  motivo:tr.querySelector(".motivo").value,
-  observacion:tr.cells[6].innerText
- }));
-}
-
-/* ================= MEMORIA DIARIA AUTOMÁTICA ================= */
-
-function guardarMemoriaAutomatica(){
- if(!tabla.tBodies[0].rows.length) return;
-
- const fecha=obtenerFechaHoy();
- const historial=JSON.parse(localStorage.getItem(STORAGE_KEY)||"{}");
-
- historial[fecha]={
-  fecha,
-  eventos:eventosTotales.value||0,
-  datos:obtenerEstadoActual()
- };
-
- localStorage.setItem(STORAGE_KEY,JSON.stringify(historial));
- localStorage.setItem(BACKUP_KEY,JSON.stringify(historial));
-}
-
-setInterval(guardarMemoriaAutomatica,5000);
-
-/* ================= HISTORIAL POR FECHA ================= */
-
-function obtenerHistorial(){
- return JSON.parse(localStorage.getItem(STORAGE_KEY)||"{}");
-}
-
-function cargarFecha(fecha){
- const historial=obtenerHistorial();
- if(!historial[fecha]) return alert("No existe registro para esa fecha");
-
- const datos=historial[fecha].datos;
-
- [...tabla.tBodies[0].rows].forEach(tr=>{
-  const id=tr.cells[0].innerText;
-  const registro=datos.find(d=>d.id===id);
-  if(registro){
-   tr.querySelector(".estado").value=registro.estado;
-   tr.querySelector(".motivo").value=registro.motivo;
-   tr.cells[6].innerText=registro.observacion;
-  }
- });
-
- eventosTotales.value=historial[fecha].eventos||0;
- actualizar();
- alert("Fecha cargada: "+fecha);
-}
-
-/* ================= COMPARATIVA HISTÓRICA ================= */
-
-function compararFechas(f1,f2){
- const h=obtenerHistorial();
- if(!h[f1]||!h[f2]) return alert("Alguna fecha no existe");
-
- const d1=h[f1].datos;
- const d2=h[f2].datos;
-
- let cambios=[];
-
- d1.forEach(cam=>{
-  const actual=d2.find(c=>c.id===cam.id);
-  if(actual && cam.estado!==actual.estado){
-   cambios.push(`Cámara ${cam.id}: ${cam.estado} → ${actual.estado}`);
-  }
- });
-
- if(!cambios.length) return alert("No hay cambios entre fechas");
-
- alert("Comparativa:\n\n"+cambios.join("\n"));
-}
-
-/* ================= RESPALDO MANUAL ================= */
-
-function descargarRespaldo(){
-
-  const data = localStorage.getItem(STORAGE_KEY);
-  if(!data){
-    alert("No hay datos para respaldar ❗");
-    return;
-  }
-
-  const turno = document.getElementById("turnoSelect")?.value || "SinTurno";
-  const fechaInput = document.getElementById("fechaReporte")?.value;
-
-  if(!fechaInput){
-    alert("Debe ingresar la fecha antes de descargar el respaldo ❗");
-    return;
-  }
-
-  // Formatear fecha a DD-MM-YYYY
-  const partes = fechaInput.split("-");
-  const fechaFormateada = `${partes[2]}-${partes[1]}-${partes[0]}`;
-
-  // Limpiar nombre por seguridad
-  const nombreArchivo = `respaldo_${turno}_${fechaFormateada}.json`
-    .replace(/\s+/g,"_")
-    .replace(/[^\w\-\.]/g,"");
-
-  const blob = new Blob([data], { type:"application/json" });
-
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = nombreArchivo;
-  a.click();
-
-  URL.revokeObjectURL(a.href);
-
-}
-
-
-/* ================= RESTAURACIÓN ================= */
-
-function restaurarRespaldo(file){
- const reader = new FileReader();
-
- reader.onload = e => {
-   try {
-     const contenido = e.target.result;
-     const historial = JSON.parse(contenido);
-
-     if(!historial || typeof historial !== "object"){
-       alert("Archivo inválido ❌");
-       return;
-     }
-
-     // Guardar en almacenamiento
-     localStorage.setItem(STORAGE_KEY, JSON.stringify(historial));
-     localStorage.setItem(BACKUP_KEY, JSON.stringify(historial));
-
-     // Obtener última fecha disponible
-     const fechas = Object.keys(historial).sort();
-     const ultimaFecha = fechas[fechas.length - 1];
-
-     if(!ultimaFecha){
-       alert("El respaldo no contiene datos");
-       return;
-     }
-
-     // Si la tabla está vacía, advertir
-     if(!tabla.tBodies[0].rows.length){
-       alert("Debe cargar primero el Excel antes de restaurar los estados ❗");
-       return;
-     }
-
-     // Cargar automáticamente la última fecha
-     cargarFecha(ultimaFecha);
-
-     alert("Respaldo restaurado y cargado correctamente ✔️\nFecha: " + ultimaFecha);
-
-   } catch(error){
-     console.error(error);
-     alert("Error al restaurar el respaldo ❌");
-   }
- };
-
- reader.readAsText(file);
-}
-
-
-/* ================= INTERFAZ EXTRA ================= */
-
-const panelExtra=document.createElement("div");
-panelExtra.className="card p-3 mt-4";
-panelExtra.innerHTML=`
- <h5>📂 Gestión Histórica</h5>
-
- <div class="row g-2 mb-2">
-  <div class="col-md-4">
-   <input type="date" id="fechaHistorial" class="form-control">
-  </div>
-  <div class="col-md-4">
-   <button class="btn btn-outline-secondary w-100" id="btnCargarFecha">Cargar Fecha</button>
-  </div>
- </div>
-
- <div class="row g-2 mb-2">
-  <div class="col-md-4">
-   <input type="date" id="fecha1" class="form-control">
-  </div>
-  <div class="col-md-4">
-   <input type="date" id="fecha2" class="form-control">
-  </div>
-  <div class="col-md-4">
-   <button class="btn btn-outline-warning w-100" id="btnComparar">Comparar</button>
-  </div>
- </div>
-
- <div class="row g-2">
-  <div class="col-md-4">
-   <button class="btn btn-outline-success w-100" id="btnDescargarBackup">Descargar Respaldo</button>
-  </div>
-  <div class="col-md-4">
-   <input type="file" id="fileRestore" class="form-control" accept=".json">
-  </div>
- </div>
-`;
-
-document.body.appendChild(panelExtra);
-
-btnGuardarTurno.onclick = guardarTurno;  
-
-document.getElementById("btnCargarFecha").onclick=()=>{
- const f=document.getElementById("fechaHistorial").value;
- if(!f) return alert("Seleccione fecha");
- cargarFecha(f);
-};
-
-document.getElementById("btnComparar").onclick=()=>{
- const f1=document.getElementById("fecha1").value;
- const f2=document.getElementById("fecha2").value;
- if(!f1||!f2) return alert("Seleccione ambas fechas");
- compararFechas(f1,f2);
-};
-
-document.getElementById("btnDescargarBackup").onclick=descargarRespaldo;
-
-document.getElementById("fileRestore").onchange=e=>{
- restaurarRespaldo(e.target.files[0]);
 };
 
 </script>
