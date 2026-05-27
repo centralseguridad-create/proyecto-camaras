@@ -23,6 +23,8 @@ import {
   getDocs,
   updateDoc,
   doc,
+  query,
+  where,
   serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
@@ -47,6 +49,8 @@ window.firebaseTools = {
   getDocs,
   updateDoc,
   doc,
+  query,
+  where,
   serverTimestamp
 };
 
@@ -430,6 +434,24 @@ async function guardarTurno(){
   const fecha = document.getElementById("fechaReporte").value;
   const turno = document.getElementById("turnoSelect").value;
   const eventos = eventosTotales.value || 0;
+
+    // 🔥 VALIDAR DUPLICADO
+
+  const q = firebaseTools.query(
+   firebaseTools.collection(window.db,"reportes"),
+   firebaseTools.where("fecha","==",fecha),
+   firebaseTools.where("turno","==",turno)
+  );
+
+  const existente = await firebaseTools.getDocs(q);
+
+  if(!existente.empty){
+
+   alert("❌ Ese turno ya fue guardado anteriormente");
+
+   return;
+
+  } 
 
   if(!fecha){
    alert("Debe seleccionar fecha ❗");
