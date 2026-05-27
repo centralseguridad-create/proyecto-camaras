@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Monitoreo de Cámaras – V2.6</title>
+
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.29/jspdf.plugin.autotable.min.js"></script>
+
+<style>
+body{background:#f8fafc}
+.card{border-radius:14px;box-shadow:0 6px 18px rgba(0,0,0,.06)}
+table{font-size:14px}
+
+.operativa{background:#e6fffa!important}
+.intermitente{background:#fff7ed!important}
+.movilidad{background:#e0e7ff!important}
+.sin-senal{background:#fee2e2!important}
+
+textarea{font-family:Consolas,monospace;font-size:13px}
+</style>
+</head>
+
+<body class="container my-4">
+
+<h2 class="mb-4">📹 Monitoreo de Cámaras – V2.6</h2>
+
+<div class="card p-4 mb-4">
+<input type="file" class="form-control mb-2" accept=".xlsx" id="excelInput">
+
+<input type="text" id="buscador" class="form-control mb-2"
+placeholder="🔍 Buscar cámara, sector o empresa">
+
+<label>Eventos Totales (manual)</label>
+<input type="number" id="eventosTotales" class="form-control mb-3" value="0">
+<div class="row mb-3">
+  <div class="col-md-4">
+    <label>Turno</label>
+    <select id="turnoSelect" class="form-select">
+      <option value="Diurno">Diurno</option>
+      <option value="Nocturno">Nocturno</option>
+    </select>
+  </div>
+
+  <div class="col-md-4">
+    <label>Fecha del Reporte</label>
+    <input type="date" id="fechaReporte" class="form-control">
+  </div>
+</div>
+
+
+<div class="d-flex flex-wrap gap-2">
+<button class="btn btn-outline-primary" id="btnReporte">📝 Reporte WhatsApp</button>
+<button class="btn btn-outline-success" id="btnCopiar">📋 Copiar WhatsApp</button>
+<button class="btn btn-success" id="btnExcel">📊 Exportar Excel</button>
+<button class="btn btn-danger" id="btnPDF">📄 Exportar PDF</button>
+</div>
+</div>
+
+<div class="card p-3 mb-3 d-flex justify-content-center align-items-center">
+<div style="width:260px">
+<canvas id="canvasGrafico" height="220"></canvas>
+</div>
+</div>
+
+<div class="card p-3 mb-4">
+<strong>📋 Cámaras del estado seleccionado</strong>
+<ul id="detalleGrafico" class="mt-2 mb-0"></ul>
+</div>
+
+<table class="table table-bordered table-hover" id="tabla">
+<thead class="table-dark">
+<tr>
+<th>N°</th>
+<th>Cámara</th>
+<th>Sector</th>
+<th>Operatividad</th>
+<th>Empresa</th>
+<th>Motivo</th>
+<th>Observación</th>
+</tr>
+</thead>
+<tbody></tbody>
+</table>
+
+<div class="card p-3 mt-4">
+<textarea id="reporteTexto" rows="40" class="form-control" readonly></textarea>
+</div>
+
+<script>
+let chart=null;
+
+/* ================= CARGA EXCEL ================= */
+excelInput.onchange=e=>{
+ const r=new FileReader();
+ r.onload=ev=>{
+  const wb=XLSX.read(ev.target.result,{type:"array"});
+  const data=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:""});
+  construirTabla(data);
+ };
+ r.readAsArrayBuffer(e.target.files[0]);
+};
+
+/* ================= TABLA ================= */
+function construirTabla(data){
+ const tb=tabla.querySelector("tbody");
+ tb.innerHTML="";
+
+ data.forEach(r=>{
+  const id=r["N°"]||r["Nº"]||r["No"];
+  if(!id)return;
+
+  const tr=document.createElement("tr");
+  tr.innerHTML=`
+   <td>${id}</td>
+   <td>${r["Cámara"]||""}</td>
+   <td>${r["Sector"]||""}</td>
+   <td>
+    <select class="form-select form-select-sm estado">
+     <option>Operativa</option>
+     <option>Intermitente</option>
+     <option>Problema de movilidad</option>
+     <option>Sin Señal</option>
+    </select>
+   </td>
+   <td>${r["Empresa"]||""}</td>
+   <td>
+    <select class="form-select form-select-sm motivo">
+     <option value="">Seleccione</option>
+     <option>Mantención</option>
+     <option>Falla eléctrica</option>
+     <option>Vandalismo</option>
+     <option>Otro</option>
+    </select>
+   </td>
+   <td contenteditable="true"></td>`;
+  tb.appendChild(tr);
+
+  const estadoSel=tr.querySelector(".estado");
+  const motivoSel=tr.querySelector(".motivo");
+
+  estadoSel.onchange=()=>{
+   if(estadoSel.value!=="Operativa" && !motivoSel.value){
+    alert("Debe seleccionar un motivo.");
+    estadoSel.value="Operativa";
+    return;
+   }
+   actualizar();
+  };
+
+  motivoSel.onchange=actualizar;
+  tr.cells[6].oninput=actualizar;
+ });
+
+ actualizar();
+}
+
+/* ================= ACTUALIZAR ================= */
+function actualizar(){
+ let op=0,int=0,mov=0,sin=0;
+
+ [...tabla.tBodies[0].rows].forEach(tr=>{
+  tr.className="";
+  const e=tr.querySelector(".estado").value;
+
+  if(e==="Sin Señal"){sin++;tr.classList.add("sin-senal")}
+  else if(e==="Intermitente"){int++;tr.classList.add("intermitente")}
+  else if(e==="Problema de movilidad"){mov++;tr.classList.add("movilidad")}
+  else{op++;tr.classList.add("operativa")}
+ });
+
+ renderGrafico(op,int,mov,sin);
+}
+
+/* ================= GRAFICO ================= */
+function renderGrafico(op,int,mov,sin){
+ if(chart)chart.destroy();
+ chart=new Chart(canvasGrafico,{
+  type:"pie",
+  data:{
+   labels:["Operativas","Intermitentes","Movilidad","Sin Señal"],
+   datasets:[{
+    data:[op,int,mov,sin],
+    backgroundColor:["#22c55e","#facc15","#6366f1","#ef4444"]
+   }]
+  },
+  options:{
+   plugins:{legend:{position:"bottom"}},
+   onClick:(e,el)=>{
+    if(!el.length)return;
+    const map={
+     "Operativas":"Operativa",
+     "Intermitentes":"Intermitente",
+     "Movilidad":"Problema de movilidad",
+     "Sin Señal":"Sin Señal"
+    };
+    listarCamarasPorEstado(map[chart.data.labels[el[0].index]]);
+   }
+  },
+  plugins:[ChartDataLabels]
+ });
+}
+
+/* ================= DESGLOSE ================= */
+function listarCamarasPorEstado(estado){
+ detalleGrafico.innerHTML="";
+ [...tabla.tBodies[0].rows].forEach(tr=>{
+  if(tr.querySelector(".estado").value===estado){
+   const li=document.createElement("li");
+   li.textContent=`${tr.cells[0].innerText} – ${tr.cells[1].innerText} (${tr.cells[2].innerText})`;
+   detalleGrafico.appendChild(li);
+  }
+ });
+ if(!detalleGrafico.children.length)
+  detalleGrafico.innerHTML="<li>No hay cámaras</li>";
+}
+
+/* ================= BUSCADOR ================= */
+buscador.oninput=e=>{
+ const q=e.target.value.toLowerCase();
+ [...tabla.tBodies[0].rows].forEach(tr=>{
+  tr.style.display=tr.innerText.toLowerCase().includes(q)?"":"none";
+ });
+};
+
+/* ================= REPORTE WHATSAPP ================= */
+btnReporte.onclick = () => {
+
+  const empresas = {};
+  const eventos = eventosTotales.value || 0;
+  const turno = document.getElementById("turnoSelect").value;
+  const fechaInput = document.getElementById("fechaReporte").value;
+
+  if(!fechaInput){
+    alert("Debe ingresar la fecha del reporte ❗");
+    return;
+  }
+
+  // Formatear fecha
+  const partes = fechaInput.split("-");
+  const fechaFormateada = `${partes[2]}/${partes[1]}/${partes[0]}`;
+
+  // Mensaje dinámico según turno
+  let saludo = "";
+  if(turno === "Diurno"){
+    saludo = `Buenas tardes, término del turno diurno del *${fechaFormateada}* con los reportes mencionados del día de hoy\n\n`;
+  } else {
+    saludo = `Buenos días, término del turno nocturno del *${fechaFormateada}* con los reportes mencionados del día de hoy\n\n`;
+  }
+
+  [...tabla.tBodies[0].rows].forEach(tr => {
+
+    const emp = tr.cells[4].innerText.trim() || "SIN EMPRESA";
+    const estado = tr.querySelector(".estado").value;
+    const obs = tr.cells[6].innerText.trim();
+
+    if(!empresas[emp]){
+      empresas[emp] = {total:0, sin:[], inter:[], mov:[], obs:[]};
+    }
+
+    empresas[emp].total++;
+
+    let linea = `• ${tr.cells[0].innerText} (${tr.cells[1].innerText} / ${tr.cells[2].innerText})`;
+
+    if(obs) linea += ` — OBS: ${obs}`;
+
+    if(estado === "Sin Señal") empresas[emp].sin.push(linea);
+    else if(estado === "Intermitente") empresas[emp].inter.push(linea);
+    else if(estado === "Problema de movilidad") empresas[emp].mov.push(linea);
+    else if(obs) empresas[emp].obs.push(linea);
+  });
+
+  let t = saludo;
+  t += "REPORTE DE CÁMARAS\n\n";
+
+  Object.entries(empresas).forEach(([emp,d])=>{
+    t += `EMPRESA: ${emp}\n`;
+    t += `TOTAL CÁMARAS: ${d.total}\n`;
+    t += `🟢 CÁMARAS OPERATIVAS TOTALES: ${d.total - d.sin.length}\n\n`;
+
+    if(d.sin.length)
+      t += `🔴 ${d.sin.length} SIN SEÑAL:\n${d.sin.join("\n")}\n\n`;
+
+    if(d.inter.length)
+      t += `🟡 ${d.inter.length} INTERMITENTES:\n${d.inter.join("\n")}\n\n`;
+
+    if(d.mov.length)
+      t += `🔵 ${d.mov.length} MOVILIDAD:\n${d.mov.join("\n")}\n\n`;
+
+    if(d.obs.length)
+      t += `📝 ${d.obs.length} CON OBSERVACIÓN:\n${d.obs.join("\n")}\n\n`;
+
+    t += "-------------------------\n\n";
+  });
+
+  t += `📌 EVENTOS TOTALES REPORTADOS: ${eventos}`;
+
+  reporteTexto.value = t;
+};
+
+
+/* ================= COPIAR ================= */
+btnCopiar.onclick=()=>{
+ if(!reporteTexto.value)return alert("Genere el reporte primero");
+ navigator.clipboard.writeText(reporteTexto.value)
+ .then(()=>alert("Reporte copiado ✔️"));
+};
+
+/* ================= EXPORTAR EXCEL ================= */
+btnExcel.onclick=()=>{
+ const rows=[...tabla.tBodies[0].rows].map(tr=>({
+  "N°":tr.cells[0].innerText,
+  "Cámara":tr.cells[1].innerText,
+  "Sector":tr.cells[2].innerText,
+  "Estado":tr.querySelector(".estado").value,
+  "Empresa":tr.cells[4].innerText,
+  "Motivo":tr.querySelector(".motivo").value,
+  "Observación":tr.cells[6].innerText
+ }));
+ const wb=XLSX.utils.book_new();
+ XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(rows),"Cámaras");
+ XLSX.writeFile(wb,"reporte_camaras.xlsx");
+};
+
+/* ================= EXPORTAR PDF ================= */
+btnPDF.onclick=()=>{
+ const {jsPDF}=window.jspdf;
+ const pdf=new jsPDF("l","mm","a4");
+
+ pdf.text("Reporte de Cámaras",14,15);
+
+ pdf.autoTable({
+  startY:22,
+  head:[["N°","Cámara","Sector","Estado","Empresa","Motivo","Observación"]],
+  body:[...tabla.tBodies[0].rows].map(tr=>[
+   tr.cells[0].innerText,
+   tr.cells[1].innerText,
+   tr.cells[2].innerText,
+   tr.querySelector(".estado").value,
+   tr.cells[4].innerText,
+   tr.querySelector(".motivo").value,
+   tr.cells[6].innerText
+  ]),
+  styles:{fontSize:9,cellPadding:3,overflow:"linebreak"},
+  headStyles:{fillColor:[30,41,59],textColor:255},
+  didParseCell:data=>{
+   if(data.section==="body" && data.column.index===3){
+    const v=data.cell.raw;
+    if(v==="Operativa")data.cell.styles.fillColor=[34,197,94];
+    if(v==="Intermitente")data.cell.styles.fillColor=[250,204,21];
+    if(v==="Problema de movilidad")data.cell.styles.fillColor=[99,102,241];
+    if(v==="Sin Señal")data.cell.styles.fillColor=[239,68,68];
+   }
+  }
+ });
+
+ pdf.save("reporte_camaras.pdf");
+};
+
+/* =========================================================
+   🔥 SISTEMA AVANZADO DE MEMORIA + HISTORIAL + RESPALDO
+   ========================================================= */
+
+const STORAGE_KEY = "monitoreo_camaras_v1";
+const BACKUP_KEY = "monitoreo_backup_auto";
+
+/* ================= UTILIDADES ================= */
+
+function obtenerFechaHoy(){
+ const d=new Date();
+ return d.toISOString().split("T")[0];
+}
+
+function obtenerEstadoActual(){
+ return [...tabla.tBodies[0].rows].map(tr=>({
+  id:tr.cells[0].innerText,
+  camara:tr.cells[1].innerText,
+  sector:tr.cells[2].innerText,
+  estado:tr.querySelector(".estado").value,
+  empresa:tr.cells[4].innerText,
+  motivo:tr.querySelector(".motivo").value,
+  observacion:tr.cells[6].innerText
+ }));
+}
+
+/* ================= MEMORIA DIARIA AUTOMÁTICA ================= */
+
+function guardarMemoriaAutomatica(){
+ if(!tabla.tBodies[0].rows.length) return;
+
+ const fecha=obtenerFechaHoy();
+ const historial=JSON.parse(localStorage.getItem(STORAGE_KEY)||"{}");
+
+ historial[fecha]={
+  fecha,
+  eventos:eventosTotales.value||0,
+  datos:obtenerEstadoActual()
+ };
+
+ localStorage.setItem(STORAGE_KEY,JSON.stringify(historial));
+ localStorage.setItem(BACKUP_KEY,JSON.stringify(historial));
+}
+
+setInterval(guardarMemoriaAutomatica,5000);
+
+/* ================= HISTORIAL POR FECHA ================= */
+
+function obtenerHistorial(){
+ return JSON.parse(localStorage.getItem(STORAGE_KEY)||"{}");
+}
+
+function cargarFecha(fecha){
+ const historial=obtenerHistorial();
+ if(!historial[fecha]) return alert("No existe registro para esa fecha");
+
+ const datos=historial[fecha].datos;
+
+ [...tabla.tBodies[0].rows].forEach(tr=>{
+  const id=tr.cells[0].innerText;
+  const registro=datos.find(d=>d.id===id);
+  if(registro){
+   tr.querySelector(".estado").value=registro.estado;
+   tr.querySelector(".motivo").value=registro.motivo;
+   tr.cells[6].innerText=registro.observacion;
+  }
+ });
+
+ eventosTotales.value=historial[fecha].eventos||0;
+ actualizar();
+ alert("Fecha cargada: "+fecha);
+}
+
+/* ================= COMPARATIVA HISTÓRICA ================= */
+
+function compararFechas(f1,f2){
+ const h=obtenerHistorial();
+ if(!h[f1]||!h[f2]) return alert("Alguna fecha no existe");
+
+ const d1=h[f1].datos;
+ const d2=h[f2].datos;
+
+ let cambios=[];
+
+ d1.forEach(cam=>{
+  const actual=d2.find(c=>c.id===cam.id);
+  if(actual && cam.estado!==actual.estado){
+   cambios.push(`Cámara ${cam.id}: ${cam.estado} → ${actual.estado}`);
+  }
+ });
+
+ if(!cambios.length) return alert("No hay cambios entre fechas");
+
+ alert("Comparativa:\n\n"+cambios.join("\n"));
+}
+
+/* ================= RESPALDO MANUAL ================= */
+
+function descargarRespaldo(){
+
+  const data = localStorage.getItem(STORAGE_KEY);
+  if(!data){
+    alert("No hay datos para respaldar ❗");
+    return;
+  }
+
+  const turno = document.getElementById("turnoSelect")?.value || "SinTurno";
+  const fechaInput = document.getElementById("fechaReporte")?.value;
+
+  if(!fechaInput){
+    alert("Debe ingresar la fecha antes de descargar el respaldo ❗");
+    return;
+  }
+
+  // Formatear fecha a DD-MM-YYYY
+  const partes = fechaInput.split("-");
+  const fechaFormateada = `${partes[2]}-${partes[1]}-${partes[0]}`;
+
+  // Limpiar nombre por seguridad
+  const nombreArchivo = `respaldo_${turno}_${fechaFormateada}.json`
+    .replace(/\s+/g,"_")
+    .replace(/[^\w\-\.]/g,"");
+
+  const blob = new Blob([data], { type:"application/json" });
+
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = nombreArchivo;
+  a.click();
+
+  URL.revokeObjectURL(a.href);
+
+}
+
+
+/* ================= RESTAURACIÓN ================= */
+
+function restaurarRespaldo(file){
+ const reader = new FileReader();
+
+ reader.onload = e => {
+   try {
+     const contenido = e.target.result;
+     const historial = JSON.parse(contenido);
+
+     if(!historial || typeof historial !== "object"){
+       alert("Archivo inválido ❌");
+       return;
+     }
+
+     // Guardar en almacenamiento
+     localStorage.setItem(STORAGE_KEY, JSON.stringify(historial));
+     localStorage.setItem(BACKUP_KEY, JSON.stringify(historial));
+
+     // Obtener última fecha disponible
+     const fechas = Object.keys(historial).sort();
+     const ultimaFecha = fechas[fechas.length - 1];
+
+     if(!ultimaFecha){
+       alert("El respaldo no contiene datos");
+       return;
+     }
+
+     // Si la tabla está vacía, advertir
+     if(!tabla.tBodies[0].rows.length){
+       alert("Debe cargar primero el Excel antes de restaurar los estados ❗");
+       return;
+     }
+
+     // Cargar automáticamente la última fecha
+     cargarFecha(ultimaFecha);
+
+     alert("Respaldo restaurado y cargado correctamente ✔️\nFecha: " + ultimaFecha);
+
+   } catch(error){
+     console.error(error);
+     alert("Error al restaurar el respaldo ❌");
+   }
+ };
+
+ reader.readAsText(file);
+}
+
+
+/* ================= INTERFAZ EXTRA ================= */
+
+const panelExtra=document.createElement("div");
+panelExtra.className="card p-3 mt-4";
+panelExtra.innerHTML=`
+ <h5>📂 Gestión Histórica</h5>
+
+ <div class="row g-2 mb-2">
+  <div class="col-md-4">
+   <input type="date" id="fechaHistorial" class="form-control">
+  </div>
+  <div class="col-md-4">
+   <button class="btn btn-outline-secondary w-100" id="btnCargarFecha">Cargar Fecha</button>
+  </div>
+ </div>
+
+ <div class="row g-2 mb-2">
+  <div class="col-md-4">
+   <input type="date" id="fecha1" class="form-control">
+  </div>
+  <div class="col-md-4">
+   <input type="date" id="fecha2" class="form-control">
+  </div>
+  <div class="col-md-4">
+   <button class="btn btn-outline-warning w-100" id="btnComparar">Comparar</button>
+  </div>
+ </div>
+
+ <div class="row g-2">
+  <div class="col-md-4">
+   <button class="btn btn-outline-success w-100" id="btnDescargarBackup">Descargar Respaldo</button>
+  </div>
+  <div class="col-md-4">
+   <input type="file" id="fileRestore" class="form-control" accept=".json">
+  </div>
+ </div>
+`;
+
+document.body.appendChild(panelExtra);
+
+document.getElementById("btnCargarFecha").onclick=()=>{
+ const f=document.getElementById("fechaHistorial").value;
+ if(!f) return alert("Seleccione fecha");
+ cargarFecha(f);
+};
+
+document.getElementById("btnComparar").onclick=()=>{
+ const f1=document.getElementById("fecha1").value;
+ const f2=document.getElementById("fecha2").value;
+ if(!f1||!f2) return alert("Seleccione ambas fechas");
+ compararFechas(f1,f2);
+};
+
+document.getElementById("btnDescargarBackup").onclick=descargarRespaldo;
+
+document.getElementById("fileRestore").onchange=e=>{
+ restaurarRespaldo(e.target.files[0]);
+};
+
+</script>
+
+</body>
+</html>
