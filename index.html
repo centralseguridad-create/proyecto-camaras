@@ -21,6 +21,8 @@ import {
   collection,
   addDoc,
   getDocs,
+  updateDoc,
+  doc,
   serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
@@ -43,6 +45,8 @@ window.firebaseTools = {
   collection,
   addDoc,
   getDocs,
+  updateDoc,
+  doc,
   serverTimestamp
 };
 
@@ -217,7 +221,10 @@ async function cargarDesdeFirebase(){
 
   snapshot.forEach(doc=>{
 
-   data.push(doc.data());
+     data.push({
+      firebaseId: doc.id,
+      ...doc.data()
+     });
 
   });
 
@@ -251,6 +258,7 @@ function construirTabla(data){
   if(!id)return;
 
   const tr=document.createElement("tr");
+  tr.dataset.id = r.firebaseId || ""; 
   tr.innerHTML=`
    <td>${id}</td>
    <td>${r.camara || r["Cámara"] || ""}</td>
@@ -286,15 +294,65 @@ function construirTabla(data){
     return;
    }
    actualizar();
+    
+   actualizarCamara(tr);
+
+   turnoGuardado = false;
+    
   };
 
-  motivoSel.onchange=actualizar;
-  tr.cells[6].oninput=actualizar;
- });
+  motivoSel.onchange=()=>{
+
+   actualizar();
+
+   actualizarCamara(tr);
+
+   turnoGuardado = false;
+
+  };
+  tr.cells[6].oninput=()=>{
+
+   actualizarCamara(tr);
+
+   turnoGuardado = false;
+
+  };
 
  actualizar();
 }
 
+async function actualizarCamara(tr){
+
+ try{
+
+  const id = tr.dataset.id;
+
+  if(!id) return;
+
+  await firebaseTools.updateDoc(
+
+   firebaseTools.doc(window.db,"camaras",id),
+
+   {
+
+    estado: tr.querySelector(".estado").value,
+    motivo: tr.querySelector(".motivo").value,
+    observacion: tr.cells[6].innerText
+
+   }
+
+  );
+
+  console.log("✅ Cámara actualizada");
+
+ }catch(error){
+
+  console.error(error);
+
+ }
+
+}
+  
 /* ================= ACTUALIZAR ================= */
 function actualizar(){
  let op=0,int=0,mov=0,sin=0;
