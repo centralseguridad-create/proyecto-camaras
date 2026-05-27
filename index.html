@@ -11,6 +11,39 @@
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.29/jspdf.plugin.autotable.min.js"></script>
+<script type="module">
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+
+import {
+  getFirestore,
+  collection,
+  addDoc,
+  getDocs
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const firebaseConfig = {
+    apiKey: "AIzaSyB8H6MX4_6CF2hzoU2D1Mj5TrrGCtSp79I",
+    authDomain: "monitoreo-camaras-462c7.firebaseapp.com",
+    projectId: "monitoreo-camaras-462c7",
+    storageBucket: "monitoreo-camaras-462c7.firebasestorage.app",
+    messagingSenderId: "543042810967",
+    appId: "1:543042810967:web:44f68bf538922d60a41f12"
+  };
+
+const app = initializeApp(firebaseConfig);
+
+const db = getFirestore(app);
+
+window.db = db;
+
+window.firebaseTools = {
+  collection,
+  addDoc,
+  getDocs
+};
+
+</script>
   
 <script type="module">
 
