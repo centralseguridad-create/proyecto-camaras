@@ -109,7 +109,7 @@ placeholder="🔍 Buscar cámara, sector o empresa">
 💾 Guardar Turno
 </button>
   
-<input type="file" id="jsonImport" accept=".json" hidden>
+<input type="file" id="jsonImport" accept=".json" multiple hidden>
 
 <button class="btn btn-secondary" id="btnImportarJson">
 📥 Importar Historial
@@ -748,21 +748,24 @@ btnImportarJson.onclick = ()=>{
 
 jsonImport.onchange = async(e)=>{
 
- const file = e.target.files[0];
+ const files = [...e.target.files];
 
- if(!file) return;
+ if(!files.length) return;
 
- const texto = await file.text();
-
- const historial = JSON.parse(texto);
-
- const fechas = Object.keys(historial);
-
- if(!confirm(`⚠️ Se importarán ${fechas.length} reportes históricos.\n\n¿Continuar?`)){
-  return;
- }
+ 
+ if(!confirm(`⚠️ Se importarán ${files.length} archivos históricos.\n\n¿Continuar?`)){
+ return;
+}
 
  try{
+
+ for(const file of files){
+
+  const texto = await file.text();
+
+  const historial = JSON.parse(texto);
+
+  const fechas = Object.keys(historial);
 
   for(const fechaKey of fechas){
 
@@ -803,11 +806,9 @@ jsonImport.onchange = async(e)=>{
 
   }
 
-  alert("🔥 Historial importado correctamente");
+ }
 
- }catch(error){
-
-  console.error(error);
+ alert("🔥 Historial importado correctamente");
 
   alert("❌ Error importando historial");
 
