@@ -26,6 +26,8 @@ import {
   setDoc,
   query,
   where,
+  orderBy,
+  limit,
   serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
@@ -53,6 +55,8 @@ window.firebaseTools = {
   setDoc,
   query,
   where,
+  orderBy,
+  limit,
   serverTimestamp
 };
 
@@ -147,11 +151,13 @@ let chart=null;
   
 let turnoGuardado = false;  
 
-window.onload = () => {
+window.onload = async () => {
 
- cargarDesdeFirebase();
+ await cargarDesdeFirebase();
 
-};  
+ await cargarUltimoTurno();
+
+};
 
 /* ================= CARGA EXCEL ================= */
 excelInput.onchange = e => {
@@ -249,6 +255,44 @@ async function cargarDesdeFirebase(){
  }
 
 }
+
+async function cargarUltimoTurno(){
+
+ try{
+
+  const q = firebaseTools.query(
+   firebaseTools.collection(window.db,"reportes"),
+   firebaseTools.orderBy("timestamp","desc"),
+   firebaseTools.limit(1)
+  );
+
+  const snapshot = await firebaseTools.getDocs(q);
+
+  if(snapshot.empty){
+   return;
+  }
+
+  const ultimo = snapshot.docs[0].data();
+
+  fechaReporte.value = ultimo.fecha || "";
+
+  turnoSelect.value = ultimo.turno || "Diurno";
+
+  eventosTotales.value = ultimo.eventos || 0;
+
+  reporteTexto.value = ultimo.reporte || "";
+
+  turnoGuardado = true;
+
+  console.log("✅ Último turno restaurado");
+
+ }catch(error){
+
+  console.error(error);
+
+ }
+
+}
   
 /* ================= TABLA ================= */
 function construirTabla(data){
@@ -307,6 +351,7 @@ function construirTabla(data){
    await actualizarCamara(tr);
 
    turnoGuardado = false;
+   desbloquearEdicion(); 
     
   };
 
@@ -317,6 +362,7 @@ function construirTabla(data){
    await actualizarCamara(tr);
 
    turnoGuardado = false;
+   desbloquearEdicion(); 
 
   };
   tr.cells[6].oninput=async()=>{
@@ -324,6 +370,7 @@ function construirTabla(data){
    await actualizarCamara(tr);
 
    turnoGuardado = false;
+   desbloquearEdicion(); 
 
   };
 
@@ -363,7 +410,34 @@ async function actualizarCamara(tr){
  }
 
 }
-  
+
+function bloquearEdicion(){
+
+ [...tabla.tBodies[0].rows].forEach(tr=>{
+
+  tr.querySelector(".estado").disabled = true;
+
+  tr.querySelector(".motivo").disabled = true;
+
+  tr.cells[6].contentEditable = false;
+
+ });
+
+}  
+
+function desbloquearEdicion(){
+
+ [...tabla.tBodies[0].rows].forEach(tr=>{
+
+  tr.querySelector(".estado").disabled = false;
+
+  tr.querySelector(".motivo").disabled = false;
+
+  tr.cells[6].contentEditable = true;
+
+ });
+
+}  
 /* ================= ACTUALIZAR ================= */
 function actualizar(){
  let op=0,int=0,mov=0,sin=0;
@@ -485,12 +559,16 @@ async function guardarTurno(){
     turno,
     eventos,
     timestamp: firebaseTools.serverTimestamp(),
-    camaras
+    camaras,
+    reporte: generarTextoReporte()
    }
 
   );
 
   turnoGuardado = true;
+  bloquearEdicion(); 
+
+  reporteTexto.value = generarTextoReporte(); 
 
   alert("✅ Turno guardado correctamente");
 
@@ -503,17 +581,7 @@ async function guardarTurno(){
  }
 
 }
-  
-/* ================= REPORTE WHATSAPP ================= */
-btnReporte.onclick = () => {
-
-  if(!turnoGuardado){
-
-   alert("❌ Debe guardar el turno antes de generar el reporte");
-
-   return;
-
-  }
+function generarTextoReporte(){
 
   const empresas = {};
   const eventos = eventosTotales.value || 0;
@@ -521,16 +589,14 @@ btnReporte.onclick = () => {
   const fechaInput = document.getElementById("fechaReporte").value;
 
   if(!fechaInput){
-    alert("Debe ingresar la fecha del reporte ❗");
-    return;
+    return "";
   }
 
-  // Formatear fecha
   const partes = fechaInput.split("-");
   const fechaFormateada = `${partes[2]}/${partes[1]}/${partes[0]}`;
 
-  // Mensaje dinámico según turno
   let saludo = "";
+
   if(turno === "Diurno"){
     saludo = `Buenas tardes, término del turno diurno del *${fechaFormateada}* con los reportes mencionados del día de hoy\n\n`;
   } else {
@@ -544,47 +610,85 @@ btnReporte.onclick = () => {
     const obs = tr.cells[6].innerText.trim();
 
     if(!empresas[emp]){
-      empresas[emp] = {total:0, sin:[], inter:[], mov:[], obs:[]};
+      empresas[emp] = {
+        total:0,
+        sin:[],
+        inter:[],
+        mov:[],
+        obs:[]
+      };
     }
 
     empresas[emp].total++;
 
     let linea = `• ${tr.cells[0].innerText} (${tr.cells[1].innerText} / ${tr.cells[2].innerText})`;
 
-    if(obs) linea += ` — OBS: ${obs}`;
+    if(obs){
+      linea += ` — OBS: ${obs}`;
+    }
 
-    if(estado === "Sin Señal") empresas[emp].sin.push(linea);
-    else if(estado === "Intermitente") empresas[emp].inter.push(linea);
-    else if(estado === "Problema de movilidad") empresas[emp].mov.push(linea);
-    else if(obs) empresas[emp].obs.push(linea);
+    if(estado === "Sin Señal"){
+      empresas[emp].sin.push(linea);
+    }
+    else if(estado === "Intermitente"){
+      empresas[emp].inter.push(linea);
+    }
+    else if(estado === "Problema de movilidad"){
+      empresas[emp].mov.push(linea);
+    }
+    else if(obs){
+      empresas[emp].obs.push(linea);
+    }
+
   });
 
   let t = saludo;
+
   t += "REPORTE DE CÁMARAS\n\n";
 
   Object.entries(empresas).forEach(([emp,d])=>{
+
     t += `EMPRESA: ${emp}\n`;
     t += `TOTAL CÁMARAS: ${d.total}\n`;
     t += `🟢 CÁMARAS OPERATIVAS TOTALES: ${d.total - d.sin.length}\n\n`;
 
-    if(d.sin.length)
+    if(d.sin.length){
       t += `🔴 ${d.sin.length} SIN SEÑAL:\n${d.sin.join("\n")}\n\n`;
+    }
 
-    if(d.inter.length)
+    if(d.inter.length){
       t += `🟡 ${d.inter.length} INTERMITENTES:\n${d.inter.join("\n")}\n\n`;
+    }
 
-    if(d.mov.length)
+    if(d.mov.length){
       t += `🔵 ${d.mov.length} MOVILIDAD:\n${d.mov.join("\n")}\n\n`;
+    }
 
-    if(d.obs.length)
+    if(d.obs.length){
       t += `📝 ${d.obs.length} CON OBSERVACIÓN:\n${d.obs.join("\n")}\n\n`;
+    }
 
     t += "-------------------------\n\n";
+
   });
 
   t += `📌 EVENTOS TOTALES REPORTADOS: ${eventos}`;
 
-  reporteTexto.value = t;
+  return t;
+
+}  
+/* ================= REPORTE WHATSAPP ================= */
+btnReporte.onclick = () => {
+
+  if(!turnoGuardado){
+
+   alert("❌ Debe guardar el turno antes de generar el reporte");
+
+   return;
+
+   }
+  
+   reporteTexto.value = generarTextoReporte();
 };
 
 
