@@ -206,6 +206,10 @@ async function cargarDesdeFirebase(){
 
   console.log("Cámaras cargadas:",data.length);
 
+  data.sort((a,b)=>
+   Number(a.numero) - Number(b.numero)
+  );
+   
   construirTabla(data);
    
   actualizar();
@@ -490,11 +494,21 @@ function listarCamarasPorEstado(estado){
 }
 
 /* ================= BUSCADOR ================= */
-buscador.oninput=e=>{
- const q=e.target.value.toLowerCase();
+buscador.oninput = e => {
+
+ const q = e.target.value.trim();
+
  [...tabla.tBodies[0].rows].forEach(tr=>{
-  tr.style.display=tr.innerText.toLowerCase().includes(q)?"":"none";
+
+  const numero = tr.cells[0].innerText.trim();
+
+  tr.style.display =
+   numero.includes(q)
+   ? ""
+   : "none";
+
  });
+
 };
 
 async function guardarTurno(){
@@ -671,13 +685,6 @@ function generarTextoReporte(){
 /* ================= REPORTE WHATSAPP ================= */
 btnReporte.onclick = () => {
 
-  if(!turnoGuardado){
-
-   alert("❌ Debe guardar el turno antes de generar el reporte");
-
-   return;
-
-   }
   
    reporteTexto.value = generarTextoReporte();
 };
@@ -795,7 +802,7 @@ jsonImport.onchange = async(e)=>{
       turno: "Importado",
       eventos: item.eventos || 0,
       camaras,
-      reporte: "Reporte histórico importado",
+      reporte: "",
       timestamp: new Date()
 
      }
