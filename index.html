@@ -20,7 +20,8 @@ import {
   getFirestore,
   collection,
   addDoc,
-  getDocs
+  getDocs,
+  serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -41,7 +42,8 @@ window.db = db;
 window.firebaseTools = {
   collection,
   addDoc,
-  getDocs
+  getDocs,
+  serverTimestamp
 };
 
 </script>
@@ -90,6 +92,9 @@ placeholder="🔍 Buscar cámara, sector o empresa">
 
 
 <div class="d-flex flex-wrap gap-2">
+<button class="btn btn-dark" id="btnGuardarTurno">
+💾 Guardar Turno
+</button>  
 <button class="btn btn-outline-primary" id="btnReporte">📝 Reporte WhatsApp</button>
 <button class="btn btn-outline-success" id="btnCopiar">📋 Copiar WhatsApp</button>
 <button class="btn btn-success" id="btnExcel">📊 Exportar Excel</button>
@@ -129,6 +134,8 @@ placeholder="🔍 Buscar cámara, sector o empresa">
 
 <script>
 let chart=null;
+  
+let turnoGuardado = false;  
 
 window.onload = () => {
 
@@ -356,8 +363,69 @@ buscador.oninput=e=>{
  });
 };
 
+async function guardarTurno(){
+
+ try{
+
+  const fecha = document.getElementById("fechaReporte").value;
+  const turno = document.getElementById("turnoSelect").value;
+  const eventos = eventosTotales.value || 0;
+
+  if(!fecha){
+   alert("Debe seleccionar fecha ❗");
+   return;
+  }
+
+  const camaras = [...tabla.tBodies[0].rows].map(tr=>({
+
+   numero: tr.cells[0].innerText,
+   camara: tr.cells[1].innerText,
+   sector: tr.cells[2].innerText,
+   estado: tr.querySelector(".estado").value,
+   empresa: tr.cells[4].innerText,
+   motivo: tr.querySelector(".motivo").value,
+   observacion: tr.cells[6].innerText
+
+  }));
+
+  await firebaseTools.addDoc(
+
+   firebaseTools.collection(window.db,"reportes"),
+
+   {
+    fecha,
+    turno,
+    eventos,
+    timestamp: firebaseTools.serverTimestamp(),
+    camaras
+   }
+
+  );
+
+  turnoGuardado = true;
+
+  alert("✅ Turno guardado correctamente");
+
+ }catch(error){
+
+  console.error(error);
+
+  alert("❌ Error guardando turno");
+
+ }
+
+}
+  
 /* ================= REPORTE WHATSAPP ================= */
 btnReporte.onclick = () => {
+
+  if(!turnoGuardado){
+
+   alert("❌ Debe guardar el turno antes de generar el reporte");
+
+   return;
+
+  }
 
   const empresas = {};
   const eventos = eventosTotales.value || 0;
@@ -713,6 +781,8 @@ panelExtra.innerHTML=`
 `;
 
 document.body.appendChild(panelExtra);
+
+btnGuardarTurno.onclick = guardarTurno;  
 
 document.getElementById("btnCargarFecha").onclick=()=>{
  const f=document.getElementById("fechaHistorial").value;
