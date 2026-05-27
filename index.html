@@ -130,6 +130,12 @@ placeholder="🔍 Buscar cámara, sector o empresa">
 <script>
 let chart=null;
 
+window.onload = () => {
+
+ cargarDesdeFirebase();
+
+};  
+
 /* ================= CARGA EXCEL ================= */
 excelInput.onchange = e => {
 
@@ -192,6 +198,36 @@ excelInput.onchange = e => {
 
 };
 
+async function cargarDesdeFirebase(){
+
+ try{
+
+  const snapshot = await firebaseTools.getDocs(
+   firebaseTools.collection(db,"camaras")
+  );
+
+  const data = [];
+
+  snapshot.forEach(doc=>{
+
+   data.push(doc.data());
+
+  });
+
+  console.log("Cámaras cargadas:",data.length);
+
+  construirTabla(data);
+
+ }catch(error){
+
+  console.error(error);
+
+  alert("❌ Error cargando Firebase");
+
+ }
+
+}
+  
 /* ================= TABLA ================= */
 function construirTabla(data){
  const tb=tabla.querySelector("tbody");
