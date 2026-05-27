@@ -23,6 +23,7 @@ import {
   getDocs,
   updateDoc,
   doc,
+  setDoc,
   query,
   where,
   serverTimestamp
@@ -49,6 +50,7 @@ window.firebaseTools = {
   getDocs,
   updateDoc,
   doc,
+  setDoc,
   query,
   where,
   serverTimestamp
@@ -290,6 +292,9 @@ function construirTabla(data){
 
   const estadoSel=tr.querySelector(".estado");
   const motivoSel=tr.querySelector(".motivo");
+   estadoSel.value = r.estado || "Operativa";
+   motivoSel.value = r.motivo || "";
+   tr.cells[6].innerText = r.observacion || "";
 
   estadoSel.onchange=()=>{
    if(estadoSel.value!=="Operativa" && !motivoSel.value){
@@ -437,27 +442,14 @@ async function guardarTurno(){
 
     // 🔥 VALIDAR DUPLICADO
 
-  const q = firebaseTools.query(
-   firebaseTools.collection(window.db,"reportes"),
-   firebaseTools.where("fecha","==",fecha),
-   firebaseTools.where("turno","==",turno)
-  );
-
-  const existente = await firebaseTools.getDocs(q);
-
-  if(!existente.empty){
-
-   alert("❌ Ese turno ya fue guardado anteriormente");
-
-   return;
-
   } 
 
   if(!fecha){
    alert("Debe seleccionar fecha ❗");
    return;
   }
-
+   
+  const reporteId = `${fecha}_${turno}`;
   const camaras = [...tabla.tBodies[0].rows].map(tr=>({
 
    numero: tr.cells[0].innerText,
@@ -470,9 +462,9 @@ async function guardarTurno(){
 
   }));
 
-  await firebaseTools.addDoc(
+  await firebaseTools.setDoc(
 
-   firebaseTools.collection(window.db,"reportes"),
+   firebaseTools.doc(window.db,"reportes",reporteId),
 
    {
     fecha,
