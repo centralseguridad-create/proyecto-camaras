@@ -752,63 +752,66 @@ jsonImport.onchange = async(e)=>{
 
  if(!files.length) return;
 
- 
  if(!confirm(`⚠️ Se importarán ${files.length} archivos históricos.\n\n¿Continuar?`)){
- return;
-}
+  return;
+ }
 
  try{
 
- for(const file of files){
+  for(const file of files){
 
-  const texto = await file.text();
+   const texto = await file.text();
 
-  const historial = JSON.parse(texto);
+   const historial = JSON.parse(texto);
 
-  const fechas = Object.keys(historial);
+   const fechas = Object.keys(historial);
 
-  for(const fechaKey of fechas){
+   for(const fechaKey of fechas){
 
-   const item = historial[fechaKey];
+    const item = historial[fechaKey];
 
-   const camaras = item.datos.map(c=>({
+    const camaras = item.datos.map(c=>({
 
-    numero: c.id || "",
-    camara: c.camara || "",
-    sector: c.sector || "",
-    empresa: c.empresa || "",
-    estado: c.estado || "Operativa",
-    motivo: c.motivo || "",
-    observacion: c.observacion || ""
+     numero: c.id || "",
+     camara: c.camara || "",
+     sector: c.sector || "",
+     empresa: c.empresa || "",
+     estado: c.estado || "Operativa",
+     motivo: c.motivo || "",
+     observacion: c.observacion || ""
 
-   }));
+    }));
 
-   const reporteId = `${item.fecha}_Importado`;
+    const reporteId = `${item.fecha}_Importado`;
 
-   await firebaseTools.setDoc(
+    await firebaseTools.setDoc(
 
-    firebaseTools.doc(window.db,"reportes",reporteId),
+     firebaseTools.doc(window.db,"reportes",reporteId),
 
-    {
+     {
 
-     fecha: item.fecha || "",
-     turno: "Importado",
-     eventos: item.eventos || 0,
-     camaras,
-     reporte: "Reporte histórico importado",
-     timestamp: new Date()
+      fecha: item.fecha || "",
+      turno: "Importado",
+      eventos: item.eventos || 0,
+      camaras,
+      reporte: "Reporte histórico importado",
+      timestamp: new Date()
 
-    }
+     }
 
-   );
+    );
 
-   console.log(`✅ Importado ${item.fecha}`);
+    console.log(`✅ Importado ${item.fecha}`);
+
+   }
 
   }
 
- }
+  alert("🔥 Historial importado correctamente");
 
- alert("🔥 Historial importado correctamente");
+ }catch(error){
+
+  console.error(error);
 
   alert("❌ Error importando historial");
 
