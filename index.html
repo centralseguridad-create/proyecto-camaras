@@ -236,14 +236,18 @@ function construirTabla(data){
  tb.innerHTML="";
 
  data.forEach(r=>{
-  const id=r["N°"]||r["Nº"]||r["No"];
+  const id =
+   r.numero ||
+   r["N°"] ||
+   r["Nº"] ||
+   r["No"];
   if(!id)return;
 
   const tr=document.createElement("tr");
   tr.innerHTML=`
    <td>${id}</td>
-   <td>${r["Cámara"]||""}</td>
-   <td>${r["Sector"]||""}</td>
+   <td>${r.camara || r["Cámara"] || ""}</td>
+   <td>${r.sector || r["Sector"] || ""}</td>
    <td>
     <select class="form-select form-select-sm estado">
      <option>Operativa</option>
@@ -252,7 +256,7 @@ function construirTabla(data){
      <option>Sin Señal</option>
     </select>
    </td>
-   <td>${r["Empresa"]||""}</td>
+   <td>${r.empresa || r["Empresa"] || ""}</td>
    <td>
     <select class="form-select form-select-sm motivo">
      <option value="">Seleccione</option>
