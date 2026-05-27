@@ -346,7 +346,7 @@ function construirTabla(data){
    await actualizarCamara(tr);
 
    turnoGuardado = false;
-   desbloquearEdicion(); 
+    
     
   };
 
@@ -357,7 +357,7 @@ function construirTabla(data){
    await actualizarCamara(tr);
 
    turnoGuardado = false;
-   desbloquearEdicion(); 
+    
 
   };
   tr.cells[6].oninput=async()=>{
@@ -365,7 +365,7 @@ function construirTabla(data){
    await actualizarCamara(tr);
 
    turnoGuardado = false;
-   desbloquearEdicion(); 
+    
 
   };
 
@@ -685,8 +685,16 @@ function generarTextoReporte(){
 /* ================= REPORTE WHATSAPP ================= */
 btnReporte.onclick = () => {
 
-  
-   reporteTexto.value = generarTextoReporte();
+ if(!turnoGuardado){
+
+  alert("❌ Debe guardar el turno antes de generar el reporte");
+
+  return;
+
+ }
+
+ reporteTexto.value = generarTextoReporte();
+
 };
 
 
@@ -826,6 +834,8 @@ jsonImport.onchange = async(e)=>{
  }
 
 };
+
+btnGuardarTurno.onclick = guardarTurno;
   
 </script>
 
