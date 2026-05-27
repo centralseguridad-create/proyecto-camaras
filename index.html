@@ -131,14 +131,65 @@ placeholder="🔍 Buscar cámara, sector o empresa">
 let chart=null;
 
 /* ================= CARGA EXCEL ================= */
-excelInput.onchange=e=>{
- const r=new FileReader();
- r.onload=ev=>{
-  const wb=XLSX.read(ev.target.result,{type:"array"});
-  const data=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:""});
-  construirTabla(data);
+excelInput.onchange = e => {
+
+ const r = new FileReader();
+
+ r.onload = async ev => {
+
+  try{
+
+   const wb = XLSX.read(ev.target.result,{type:"array"});
+
+   const data = XLSX.utils.sheet_to_json(
+    wb.Sheets[wb.SheetNames[0]],
+    {defval:""}
+   );
+
+   let total = 0;
+
+   for(const fila of data){
+
+    const id =
+      fila["N°"] ||
+      fila["Nº"] ||
+      fila["No"];
+
+    if(!id) continue;
+
+    await firebaseTools.addDoc(
+      firebaseTools.collection(db,"camaras"),
+      {
+
+       numero: id,
+       camara: fila["Cámara"] || "",
+       sector: fila["Sector"] || "",
+       empresa: fila["Empresa"] || "",
+       estado: "Operativa",
+       motivo: "",
+       observacion: ""
+
+      }
+    );
+
+    total++;
+
+   }
+
+   alert(`✅ ${total} cámaras importadas a Firebase`);
+
+  }catch(error){
+
+   console.error(error);
+
+   alert("❌ Error importando Excel");
+
+  }
+
  };
+
  r.readAsArrayBuffer(e.target.files[0]);
+
 };
 
 /* ================= TABLA ================= */
