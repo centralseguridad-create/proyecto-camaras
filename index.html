@@ -109,11 +109,12 @@ placeholder="🔍 Buscar cámara, sector o empresa">
 💾 Guardar Turno
 </button>
   
-<input type="file" id="jsonImport" accept=".json" multiple hidden>
+<!-- IMPORTADOR HISTÓRICO OCULTO -->
+<input type="file" id="jsonImport" accept=".json" multiple hidden hidden>
 
-<button class="btn btn-secondary" id="btnImportarJson">
+<button class="btn btn-secondary d-none" id="btnImportarJson">
 📥 Importar Historial
-</button>  
+</button>
   
 <button class="btn btn-outline-primary" id="btnReporte">📝 Reporte WhatsApp</button>
 <button class="btn btn-outline-success" id="btnCopiar">📋 Copiar WhatsApp</button>
