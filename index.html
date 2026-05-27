@@ -296,7 +296,7 @@ function construirTabla(data){
    motivoSel.value = r.motivo || "";
    tr.cells[6].innerText = r.observacion || "";
 
-  estadoSel.onchange=()=>{
+  estadoSel.onchange=async()=>{
    if(estadoSel.value!=="Operativa" && !motivoSel.value){
     alert("Debe seleccionar un motivo.");
     estadoSel.value="Operativa";
@@ -304,24 +304,24 @@ function construirTabla(data){
    }
    actualizar();
     
-   actualizarCamara(tr);
+   await actualizarCamara(tr);
 
    turnoGuardado = false;
     
   };
 
-  motivoSel.onchange=()=>{
+  motivoSel.onchange=async()=>{
 
    actualizar();
 
-   actualizarCamara(tr);
+   await actualizarCamara(tr);
 
    turnoGuardado = false;
 
   };
-  tr.cells[6].oninput=()=>{
+  tr.cells[6].oninput=async()=>{
 
-   actualizarCamara(tr);
+   await actualizarCamara(tr);
 
    turnoGuardado = false;
 
@@ -442,7 +442,6 @@ async function guardarTurno(){
 
     // 🔥 VALIDAR DUPLICADO
 
-  } 
 
   if(!fecha){
    alert("Debe seleccionar fecha ❗");
@@ -450,6 +449,21 @@ async function guardarTurno(){
   }
    
   const reporteId = `${fecha}_${turno}`;
+    const existente = await firebaseTools.getDocs(
+   firebaseTools.query(
+    firebaseTools.collection(window.db,"reportes"),
+    firebaseTools.where("fecha","==",fecha),
+    firebaseTools.where("turno","==",turno)
+   )
+  );
+
+  if(!existente.empty){
+
+   alert("❌ Ese turno ya existe");
+
+   return;
+
+  }
   const camaras = [...tabla.tBodies[0].rows].map(tr=>({
 
    numero: tr.cells[0].innerText,
